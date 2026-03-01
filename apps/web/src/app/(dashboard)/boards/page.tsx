@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   LayoutGrid,
@@ -401,12 +401,32 @@ function BoardCard({
 
 // ─── Page ──────────────────────────────────────────────────────────────────────
 
+// Plan limits: free plan → 1 board max
+const PLAN_BOARD_LIMITS: Record<string, number> = {
+  free: 1,
+  indie: Infinity,
+  pro: Infinity,
+  team: Infinity,
+}
+
 export default function BoardsPage() {
   const [boards, setBoards] = useState<Board[]>(INITIAL_BOARDS)
   const [showCreate, setShowCreate] = useState(false)
   const [editingBoard, setEditingBoard] = useState<Board | null>(null)
   const [deletingBoard, setDeletingBoard] = useState<Board | null>(null)
   const [filter, setFilter] = useState<'all' | 'public' | 'private' | 'archived'>('all')
+  const [userPlan, setUserPlan] = useState<string>('free')
+
+  // Fetch billing status to enforce plan limits
+  useEffect(() => {
+    fetch('/api/billing/status')
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.plan) setUserPlan(data.plan) })
+      .catch(() => {/* ignore */})
+  }, [])
+
+  const boardLimit = PLAN_BOARD_LIMITS[userPlan] ?? 1
+  const atBoardLimit = boards.filter((b) => !b.isArchived).length >= boardLimit
 
   function handleCreate(data: Partial<Board>) {
     const newBoard: Board = {
@@ -468,11 +488,18 @@ export default function BoardsPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium bg-[#7c3bed] hover:bg-[#6d28d9] text-white transition-colors"
+          onClick={() => !atBoardLimit && setShowCreate(true)}
+          disabled={atBoardLimit}
+          title={atBoardLimit ? 'Upgrade your plan to create more boards' : undefined}
+          className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+            atBoardLimit
+              ? 'bg-[#1a2535] text-[#4a5568] cursor-not-allowed border border-white/[0.05]'
+              : 'bg-[#7c3bed] hover:bg-[#6d28d9] text-white'
+          }`}
         >
           <Plus className="w-4 h-4" />
           New Board
+          {atBoardLimit && <span className="text-xs ml-1 opacity-70">(limit reached)</span>}
         </button>
       </div>
 
