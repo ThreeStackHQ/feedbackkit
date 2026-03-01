@@ -48,6 +48,9 @@ export async function GET(
       if (!validStatuses.includes(status)) {
         return NextResponse.json({ error: "Invalid status filter" }, { status: 400 });
       }
+      // BUG FIX (Sprint 4.3): status filter was validated but never applied to query.
+      // Now correctly adds status condition so ?status=planned actually filters results.
+      conditions.push(eq(requests.status, status as typeof requests.status));
     }
 
     const allRequests = await db
