@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db, boards, requests, eq, and } from "@feedbackkit/db";
 import { z } from "zod";
+import { notifyWatchersOnStatusChange } from "@/lib/notifications";
 
 const updateRequestSchema = z.object({
   title: z.string().min(1).max(200).optional(),
@@ -100,11 +101,30 @@ export async function PATCH(
     if (parsed.data.status !== undefined) updates.status = parsed.data.status;
     if (parsed.data.internalNote !== undefined) updates.internalNote = parsed.data.internalNote;
 
+    // Capture previous status before update (for notification comparison)
+    const [existingRequest] = await db
+      .select({ status: requests.status })
+      .from(requests)
+      .where(eq(requests.id, params.id))
+      .limit(1);
+    const previousStatus = existingRequest?.status ?? null;
+
     const [updated] = await db
       .update(requests)
       .set(updates)
       .where(eq(requests.id, params.id))
       .returning();
+
+    // Notify watchers if status changed (fire-and-forget)
+    if (parsed.data.status && parsed.data.status !== previousStatus) {
+      notifyWatchersOnStatusChange({
+        requestId: params.id,
+        newStatus: parsed.data.status,
+        previousStatus,
+      }).catch((err) => {
+        console.error("[PATCH /api/requests/:id] Notification error:", err);
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (error) {
