@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { db, users, eq } from "@feedbackkit/db";
@@ -52,6 +54,10 @@ export async function POST(req: NextRequest) {
         passwordHash,
       })
       .returning({ id: users.id, email: users.email, name: users.name });
+
+    if (!user) {
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    }
 
     return NextResponse.json(
       { user: { id: user.id, email: user.email, name: user.name } },
